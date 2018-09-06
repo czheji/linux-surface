@@ -1,3 +1,12 @@
+post_install() {
+  echo "post install called."
+  SUR_MODEL="$(dmidecode | grep "Product Name" -m 1 | xargs | sed -e 's/Product Name: //g')"
+  SUR_SKU="$(dmidecode | grep "SKU Number" -m 1 | xargs | sed -e 's/SKU Number: //g')"
+
+  echo "\ninstall on ${SUR_MODEL}\n"
+
+}
+
 post_upgrade() {
   if findmnt --fstab -uno SOURCE /boot &>/dev/null && ! mountpoint -q /boot; then
     echo "WARNING: /boot appears to be a separate partition but is not mounted."

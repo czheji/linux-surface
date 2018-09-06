@@ -1,21 +1,8 @@
-diff --git a/Documentation/devicetree/bindings/input/hid-over-i2c.txt b/Documentation/devicetree/bindings/input/hid-over-i2c.txt
-index 28e8bd8..4d3da9d 100644
---- a/Documentation/devicetree/bindings/input/hid-over-i2c.txt
-+++ b/Documentation/devicetree/bindings/input/hid-over-i2c.txt
-@@ -31,7 +31,7 @@ device-specific compatible properties, which should be used in addition to the
- 
- - vdd-supply: phandle of the regulator that provides the supply voltage.
- - post-power-on-delay-ms: time required by the device after enabling its regulators
--  before it is ready for communication. Must be used with 'vdd-supply'.
-+  or powering it on, before it is ready for communication.
- 
- Example:
- 
 diff --git a/drivers/gpu/drm/i915/Makefile b/drivers/gpu/drm/i915/Makefile
-index 2acf3b3..ab69d8d 100644
+index 4eee91a3a236..eb7c3284d23a 100644
 --- a/drivers/gpu/drm/i915/Makefile
 +++ b/drivers/gpu/drm/i915/Makefile
-@@ -123,6 +123,9 @@ i915-y += dvo_ch7017.o \
+@@ -148,6 +148,9 @@ i915-y += dvo_ch7017.o \
  	  intel_sdvo.o \
  	  intel_tv.o
  
@@ -26,10 +13,10 @@ index 2acf3b3..ab69d8d 100644
  i915-$(CONFIG_DRM_I915_CAPTURE_ERROR) += i915_gpu_error.o
  i915-$(CONFIG_DRM_I915_SELFTEST) += \
 diff --git a/drivers/gpu/drm/i915/i915_drv.c b/drivers/gpu/drm/i915/i915_drv.c
-index 62004ea..94bce13 100644
+index 3b4daafebdcb..31968ebd3132 100644
 --- a/drivers/gpu/drm/i915/i915_drv.c
 +++ b/drivers/gpu/drm/i915/i915_drv.c
-@@ -51,6 +51,7 @@
+@@ -53,6 +53,7 @@
  #include "i915_vgpu.h"
  #include "intel_drv.h"
  #include "intel_uc.h"
@@ -37,31 +24,31 @@ index 62004ea..94bce13 100644
  
  static struct drm_driver driver;
  
-@@ -691,6 +692,9 @@ static int i915_load_modeset_init(struct drm_device *dev)
+@@ -713,6 +714,9 @@ static int i915_load_modeset_init(struct drm_device *dev)
+ 	/* Only enable hotplug handling once the fbdev is fully set up. */
+ 	intel_hpd_init(dev_priv);
  
- 	drm_kms_helper_poll_init(dev);
- 
-+	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc_submission)
++	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc && i915_modparams.enable_ipts)
 +        intel_ipts_init(dev);
 +
  	return 0;
  
  cleanup_gem:
-@@ -1394,6 +1398,9 @@ void i915_driver_unload(struct drm_device *dev)
+@@ -1438,6 +1442,9 @@ void i915_driver_unload(struct drm_device *dev)
  	struct drm_i915_private *dev_priv = to_i915(dev);
  	struct pci_dev *pdev = dev_priv->drm.pdev;
  
-+	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc_submission)
++	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc && i915_modparams.enable_ipts)
 +		intel_ipts_cleanup(dev);
 +
  	i915_driver_unregister(dev_priv);
  
  	if (i915_gem_suspend(dev_priv))
 diff --git a/drivers/gpu/drm/i915/i915_drv.h b/drivers/gpu/drm/i915/i915_drv.h
-index e143004..46b6dbe 100644
+index ce18b6cf6e68..35a63cb44211 100644
 --- a/drivers/gpu/drm/i915/i915_drv.h
 +++ b/drivers/gpu/drm/i915/i915_drv.h
-@@ -3804,6 +3804,9 @@ void i915_gem_object_do_bit_17_swizzle(struct drm_i915_gem_object *obj,
+@@ -3461,6 +3461,9 @@ void i915_gem_object_do_bit_17_swizzle(struct drm_i915_gem_object *obj,
  void i915_gem_object_save_bit_17_swizzle(struct drm_i915_gem_object *obj,
  					 struct sg_table *pages);
  
@@ -72,11 +59,11 @@ index e143004..46b6dbe 100644
  __i915_gem_context_lookup_rcu(struct drm_i915_file_private *file_priv, u32 id)
  {
 diff --git a/drivers/gpu/drm/i915/i915_gem_context.c b/drivers/gpu/drm/i915/i915_gem_context.c
-index f782cf2..a8dd495 100644
+index f2cbea7cf940..2e6a63ef5c98 100644
 --- a/drivers/gpu/drm/i915/i915_gem_context.c
 +++ b/drivers/gpu/drm/i915/i915_gem_context.c
-@@ -449,6 +449,18 @@ destroy_kernel_context(struct i915_gem_context **ctxp)
- 	i915_gem_context_free(ctx);
+@@ -455,6 +455,18 @@ static bool needs_preempt_context(struct drm_i915_private *i915)
+ 	return HAS_LOGICAL_RING_PREEMPTION(i915);
  }
  
 +struct i915_gem_context *i915_gem_context_create_ipts(struct drm_device *dev)
@@ -94,43 +81,143 @@ index f782cf2..a8dd495 100644
  int i915_gem_contexts_init(struct drm_i915_private *dev_priv)
  {
  	struct i915_gem_context *ctx;
-diff --git a/drivers/gpu/drm/i915/i915_guc_submission.c b/drivers/gpu/drm/i915/i915_guc_submission.c
-index f84c267..9c1e595 100644
---- a/drivers/gpu/drm/i915/i915_guc_submission.c
-+++ b/drivers/gpu/drm/i915/i915_guc_submission.c
-@@ -88,6 +88,7 @@ static inline bool is_high_priority(struct i915_guc_client* client)
+diff --git a/drivers/gpu/drm/i915/i915_irq.c b/drivers/gpu/drm/i915/i915_irq.c
+index 633c18785c1e..ef6fbeb9eb54 100644
+--- a/drivers/gpu/drm/i915/i915_irq.c
++++ b/drivers/gpu/drm/i915/i915_irq.c
+@@ -36,6 +36,7 @@
+ #include "i915_drv.h"
+ #include "i915_trace.h"
+ #include "intel_drv.h"
++#include "intel_ipts.h"
  
- static int __reserve_doorbell(struct i915_guc_client *client)
+ /**
+  * DOC: interrupt handling
+@@ -1416,6 +1417,9 @@ gen8_cs_irq_handler(struct intel_engine_cs *engine, u32 iir)
+ 		tasklet |= USES_GUC_SUBMISSION(engine->i915);
+ 	}
+ 
++	if (iir & GT_RENDER_PIPECTL_NOTIFY_INTERRUPT)
++		intel_ipts_notify_complete();
++
+ 	if (tasklet)
+ 		tasklet_hi_schedule(&execlists->tasklet);
+ }
+@@ -3773,7 +3777,8 @@ static void gen8_gt_irq_postinstall(struct drm_i915_private *dev_priv)
+ {
+ 	/* These are interrupts we'll toggle with the ring mask register */
+ 	uint32_t gt_interrupts[] = {
+-		GT_RENDER_USER_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
++		GT_RENDER_PIPECTL_NOTIFY_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
++			GT_RENDER_USER_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
+ 			GT_CONTEXT_SWITCH_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
+ 			GT_RENDER_USER_INTERRUPT << GEN8_BCS_IRQ_SHIFT |
+ 			GT_CONTEXT_SWITCH_INTERRUPT << GEN8_BCS_IRQ_SHIFT,
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 08108ce5be21..db321ac57fa5 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
++++ b/drivers/gpu/drm/i915/i915_params.c
+@@ -152,7 +152,10 @@ i915_param_named_unsafe(edp_vswing, int, 0400,
+ i915_param_named_unsafe(enable_guc, int, 0400,
+ 	"Enable GuC load for GuC submission and/or HuC load. "
+ 	"Required functionality can be selected using bitmask values. "
+-	"(-1=auto, 0=disable [default], 1=GuC submission, 2=HuC load)");
++	"(-1=auto, 0=disable, 1=GuC submission [default], 2=HuC load)");
++
++i915_param_named_unsafe(enable_ipts, bool, 0400,
++	"Enable IPTS Touchscreen and Pen support (default: true)");
+ 
+ i915_param_named(guc_log_level, int, 0400,
+ 	"GuC firmware logging level. Requires GuC to be loaded. "
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 430f5f9d0ff4..2b80220dbc36 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
++++ b/drivers/gpu/drm/i915/i915_params.h
+@@ -47,7 +47,7 @@ struct drm_printer;
+ 	param(int, disable_power_well, -1) \
+ 	param(int, enable_ips, 1) \
+ 	param(int, invert_brightness, 0) \
+-	param(int, enable_guc, 0) \
++	param(int, enable_guc, 1) \
+ 	param(int, guc_log_level, -1) \
+ 	param(char *, guc_firmware_path, NULL) \
+ 	param(char *, huc_firmware_path, NULL) \
+@@ -69,7 +69,8 @@ struct drm_printer;
+ 	param(bool, nuclear_pageflip, false) \
+ 	param(bool, enable_dp_mst, true) \
+ 	param(bool, enable_dpcd_backlight, false) \
+-	param(bool, enable_gvt, false)
++	param(bool, enable_gvt, false) \
++	param(bool, enable_ipts, true)
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct i915_params {
+diff --git a/drivers/gpu/drm/i915/intel_dp.c b/drivers/gpu/drm/i915/intel_dp.c
+index b7b4cfdeb974..5163c29ca311 100644
+--- a/drivers/gpu/drm/i915/intel_dp.c
++++ b/drivers/gpu/drm/i915/intel_dp.c
+@@ -2572,8 +2572,8 @@ void intel_dp_sink_dpms(struct intel_dp *intel_dp, int mode)
+ 		return;
+ 
+ 	if (mode != DRM_MODE_DPMS_ON) {
+-		if (downstream_hpd_needs_d0(intel_dp))
+-			return;
++		//if (downstream_hpd_needs_d0(intel_dp))
++		//	return;
+ 
+ 		ret = drm_dp_dpcd_writeb(&intel_dp->aux, DP_SET_POWER,
+ 					 DP_SET_POWER_D3);
+diff --git a/drivers/gpu/drm/i915/intel_guc.h b/drivers/gpu/drm/i915/intel_guc.h
+index b9424ac644ac..154bf44773f4 100644
+--- a/drivers/gpu/drm/i915/intel_guc.h
++++ b/drivers/gpu/drm/i915/intel_guc.h
+@@ -64,6 +64,7 @@ struct intel_guc {
+ 
+ 	struct intel_guc_client *execbuf_client;
+ 	struct intel_guc_client *preempt_client;
++	struct intel_guc_client *ipts_client;
+ 
+ 	struct guc_preempt_work preempt_work[I915_NUM_ENGINES];
+ 	struct workqueue_struct *preempt_wq;
+diff --git a/drivers/gpu/drm/i915/intel_guc_submission.c b/drivers/gpu/drm/i915/intel_guc_submission.c
+index 8a8ad2fe158d..db40b8061a16 100644
+--- a/drivers/gpu/drm/i915/intel_guc_submission.c
++++ b/drivers/gpu/drm/i915/intel_guc_submission.c
+@@ -94,6 +94,7 @@ static inline bool is_high_priority(struct intel_guc_client *client)
+ 
+ static int reserve_doorbell(struct intel_guc_client *client)
  {
 +	struct drm_i915_private *dev_priv = guc_to_i915(client->guc);
  	unsigned long offset;
  	unsigned long end;
  	u16 id;
-@@ -100,10 +101,15 @@ static int __reserve_doorbell(struct i915_guc_client *client)
+@@ -106,11 +107,16 @@ static int reserve_doorbell(struct intel_guc_client *client)
  	 * priority contexts, the second half for high-priority ones.
  	 */
  	offset = 0;
--	end = GUC_NUM_DOORBELLS/2;
+-	end = GUC_NUM_DOORBELLS / 2;
 -	if (is_high_priority(client)) {
 -		offset = end;
 -		end += offset;
 +	if (IS_SKYLAKE(dev_priv) || IS_KABYLAKE(dev_priv)) {
 +		end = GUC_NUM_DOORBELLS;
-+	}
+ 	}
 +	else {
 +		end = GUC_NUM_DOORBELLS/2;
 +		if (is_high_priority(client)) {
 +			offset = end;
 +			end += offset;
 +		}
- 	}
++ 	}
  
  	id = find_next_zero_bit(client->guc->doorbell_bitmap, end, offset);
-@@ -331,7 +337,14 @@ static void guc_stage_desc_init(struct intel_guc *guc,
+ 	if (id == end)
+@@ -353,8 +359,14 @@ static void guc_stage_desc_init(struct intel_guc *guc,
  	desc = __get_stage_desc(client);
  	memset(desc, 0, sizeof(*desc));
  
--	desc->attribute = GUC_STAGE_DESC_ATTR_ACTIVE | GUC_STAGE_DESC_ATTR_KERNEL;
+-	desc->attribute = GUC_STAGE_DESC_ATTR_ACTIVE |
+-			  GUC_STAGE_DESC_ATTR_KERNEL;
 +	desc->attribute = GUC_STAGE_DESC_ATTR_ACTIVE;
 +	if ((client->priority == GUC_CLIENT_PRIORITY_KMD_NORMAL) ||
 +			(client->priority == GUC_CLIENT_PRIORITY_KMD_HIGH)) {
@@ -139,10 +226,10 @@ index f84c267..9c1e595 100644
 +		desc->attribute  |= GUC_STAGE_DESC_ATTR_PCH;
 +	}
 +
+ 	if (is_high_priority(client))
+ 		desc->attribute |= GUC_STAGE_DESC_ATTR_PREEMPT;
  	desc->stage_id = client->stage_id;
- 	desc->priority = client->priority;
- 	desc->db_id = client->doorbell_id;
-@@ -1042,7 +1055,8 @@ static void guc_interrupts_capture(struct drm_i915_private *dev_priv)
+@@ -1128,7 +1140,8 @@ static void guc_interrupts_capture(struct drm_i915_private *dev_priv)
  		I915_WRITE(RING_MODE_GEN7(engine), irqs);
  
  	/* route USER_INTERRUPT to Host, all others are sent to GuC. */
@@ -152,30 +239,37 @@ index f84c267..9c1e595 100644
  	       GT_RENDER_USER_INTERRUPT << GEN8_BCS_IRQ_SHIFT;
  	/* These three registers have the same bit definitions */
  	I915_WRITE(GUC_BCS_RCS_IER, ~irqs);
-@@ -1176,3 +1190,47 @@ void i915_guc_submission_disable(struct drm_i915_private *dev_priv)
- 	guc_client_free(guc->execbuf_client);
- 	guc->execbuf_client = NULL;
+@@ -1257,6 +1270,58 @@ void intel_guc_submission_disable(struct intel_guc *guc)
+ 	intel_engines_reset_default_submission(dev_priv);
  }
-+
+ 
 +int i915_guc_ipts_submission_enable(struct drm_i915_private *dev_priv,
 +				    struct i915_gem_context *ctx)
 +{
 +	struct intel_guc *guc = &dev_priv->guc;
-+	struct i915_guc_client *client;
++	struct intel_guc_client *client;
++	int err;
++	int ret;
 +
 +	/* client for execbuf submission */
 +	client = guc_client_alloc(dev_priv,
 +				  INTEL_INFO(dev_priv)->ring_mask,
-+				  IS_SKYLAKE(dev_priv) || IS_KABYLAKE(dev_priv) ? GUC_CLIENT_PRIORITY_HIGH : GUC_CLIENT_PRIORITY_NORMAL,
++				  GUC_CLIENT_PRIORITY_NORMAL,
 +				  ctx);
-+	if (!client) {
++	if (IS_ERR(client)) {
 +		DRM_ERROR("Failed to create normal GuC client!\n");
 +		return -ENOMEM;
 +	}
 +
 +	guc->ipts_client = client;
-+	intel_guc_sample_forcewake(guc);
-+	guc_init_doorbell_hw(guc);
++
++	err = intel_guc_sample_forcewake(guc);
++	if (err)
++		return err;
++
++	ret = create_doorbell(guc->ipts_client);
++	if (ret)
++		return ret;
 +
 +	return 0;
 +}
@@ -200,102 +294,18 @@ index f84c267..9c1e595 100644
 +	if (err)
 +		DRM_ERROR("Not able to reacquire IPTS doorbell\n");
 +}
-diff --git a/drivers/gpu/drm/i915/i915_irq.c b/drivers/gpu/drm/i915/i915_irq.c
-index f820584..d7d68d7 100644
---- a/drivers/gpu/drm/i915/i915_irq.c
-+++ b/drivers/gpu/drm/i915/i915_irq.c
-@@ -36,6 +36,7 @@
- #include "i915_drv.h"
- #include "i915_trace.h"
- #include "intel_drv.h"
-+#include "intel_ipts.h"
- 
- /**
-  * DOC: interrupt handling
-@@ -1399,6 +1400,9 @@ gen8_cs_irq_handler(struct intel_engine_cs *engine, u32 iir, int test_shift)
- 		tasklet |= i915_modparams.enable_guc_submission;
- 	}
- 
-+	if (iir & (GT_RENDER_PIPECTL_NOTIFY_INTERRUPT << test_shift))
-+		intel_ipts_notify_complete();
 +
- 	if (tasklet)
- 		tasklet_hi_schedule(&execlists->irq_tasklet);
- }
-@@ -3560,7 +3564,8 @@ static void gen8_gt_irq_postinstall(struct drm_i915_private *dev_priv)
- {
- 	/* These are interrupts we'll toggle with the ring mask register */
- 	uint32_t gt_interrupts[] = {
--		GT_RENDER_USER_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
-+		GT_RENDER_PIPECTL_NOTIFY_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
-+			GT_RENDER_USER_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
- 			GT_CONTEXT_SWITCH_INTERRUPT << GEN8_RCS_IRQ_SHIFT |
- 			GT_RENDER_USER_INTERRUPT << GEN8_BCS_IRQ_SHIFT |
- 			GT_CONTEXT_SWITCH_INTERRUPT << GEN8_BCS_IRQ_SHIFT,
-diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
-index b4faeb6..a906694 100644
---- a/drivers/gpu/drm/i915/i915_params.c
-+++ b/drivers/gpu/drm/i915/i915_params.c
-@@ -101,7 +101,7 @@ i915_param_named_unsafe(enable_ppgtt, int, 0400,
- 
- i915_param_named_unsafe(enable_execlists, int, 0400,
- 	"Override execlists usage. "
--	"(-1=auto [default], 0=disabled, 1=enabled)");
-+	"(-1=auto, 0=disabled [default], 1=enabled)");
- 
- i915_param_named_unsafe(enable_psr, int, 0600,
- 	"Enable PSR "
-@@ -164,11 +164,11 @@ i915_param_named_unsafe(edp_vswing, int, 0400,
- 
- i915_param_named_unsafe(enable_guc_loading, int, 0400,
- 	"Enable GuC firmware loading "
--	"(-1=auto, 0=never [default], 1=if available, 2=required)");
-+	"(-1=auto, 0=never, 1=if available [default], 2=required)");
- 
- i915_param_named_unsafe(enable_guc_submission, int, 0400,
- 	"Enable GuC submission "
--	"(-1=auto, 0=never [default], 1=if available, 2=required)");
-+	"(-1=auto, 0=never, 1=if available [default], 2=required)");
- 
- i915_param_named(guc_log_level, int, 0400,
- 	"GuC firmware logging level (-1:disabled (default), 0-3:enabled)");
-diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
-index c729226..2336695 100644
---- a/drivers/gpu/drm/i915/i915_params.h
-+++ b/drivers/gpu/drm/i915/i915_params.h
-@@ -39,13 +39,13 @@
- 	param(int, enable_dc, -1) \
- 	param(int, enable_fbc, -1) \
- 	param(int, enable_ppgtt, -1) \
--	param(int, enable_execlists, -1) \
-+	param(int, enable_execlists, 0) \
- 	param(int, enable_psr, -1) \
- 	param(int, disable_power_well, -1) \
- 	param(int, enable_ips, 1) \
- 	param(int, invert_brightness, 0) \
--	param(int, enable_guc_loading, 0) \
--	param(int, enable_guc_submission, 0) \
-+	param(int, enable_guc_loading, 1) \
-+	param(int, enable_guc_submission, 1) \
- 	param(int, guc_log_level, -1) \
- 	param(char *, guc_firmware_path, NULL) \
- 	param(char *, huc_firmware_path, NULL) \
-diff --git a/drivers/gpu/drm/i915/intel_guc.h b/drivers/gpu/drm/i915/intel_guc.h
-index 418450b..c1bd36c 100644
---- a/drivers/gpu/drm/i915/intel_guc.h
-+++ b/drivers/gpu/drm/i915/intel_guc.h
-@@ -56,6 +56,7 @@ struct intel_guc {
- 	struct ida stage_ids;
- 
- 	struct i915_guc_client *execbuf_client;
-+	struct i915_guc_client *ipts_client;
- 
- 	DECLARE_BITMAP(doorbell_bitmap, GUC_NUM_DOORBELLS);
- 	/* Cyclic counter mod pagesize	*/
-@@ -116,5 +117,9 @@ int intel_guc_suspend(struct drm_i915_private *dev_priv);
- int intel_guc_resume(struct drm_i915_private *dev_priv);
- struct i915_vma *intel_guc_allocate_vma(struct intel_guc *guc, u32 size);
- u32 intel_guc_wopcm_size(struct drm_i915_private *dev_priv);
+ #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
+ #include "selftests/intel_guc.c"
+ #endif
+diff --git a/drivers/gpu/drm/i915/intel_guc_submission.h b/drivers/gpu/drm/i915/intel_guc_submission.h
+index fb081cefef93..71fc7986585a 100644
+--- a/drivers/gpu/drm/i915/intel_guc_submission.h
++++ b/drivers/gpu/drm/i915/intel_guc_submission.h
+@@ -79,5 +79,9 @@ void intel_guc_submission_disable(struct intel_guc *guc);
+ void intel_guc_submission_fini(struct intel_guc *guc);
+ int intel_guc_preempt_work_create(struct intel_guc *guc);
+ void intel_guc_preempt_work_destroy(struct intel_guc *guc);
 +int i915_guc_ipts_submission_enable(struct drm_i915_private *dev_priv,
 +				    struct i915_gem_context *ctx);
 +void i915_guc_ipts_submission_disable(struct drm_i915_private *dev_priv);
@@ -304,7 +314,7 @@ index 418450b..c1bd36c 100644
  #endif
 diff --git a/drivers/gpu/drm/i915/intel_ipts.c b/drivers/gpu/drm/i915/intel_ipts.c
 new file mode 100644
-index 0000000..be9fa6f
+index 000000000000..f8cc5eaf033d
 --- /dev/null
 +++ b/drivers/gpu/drm/i915/intel_ipts.c
 @@ -0,0 +1,627 @@
@@ -337,7 +347,7 @@ index 0000000..be9fa6f
 +#include <linux/intel_ipts_if.h>
 +#include <drm/drmP.h>
 +
-+#include "i915_guc_submission.h"
++#include "intel_guc_submission.h"
 +#include "i915_drv.h"
 +
 +#define SUPPORTED_IPTS_INTERFACE_VERSION	1
@@ -622,7 +632,7 @@ index 0000000..be9fa6f
 +{
 +	struct drm_i915_private *dev_priv = to_i915(intel_ipts.dev);
 +	struct intel_guc *guc = &dev_priv->guc;
-+	struct i915_guc_client *client;
++	struct intel_guc_client *client;
 +	struct guc_process_desc *desc;
 +	void *base = NULL;
 +	intel_ipts_wq_info_t *wq_info;
@@ -937,7 +947,7 @@ index 0000000..be9fa6f
 +}
 diff --git a/drivers/gpu/drm/i915/intel_ipts.h b/drivers/gpu/drm/i915/intel_ipts.h
 new file mode 100644
-index 0000000..a6965d1
+index 000000000000..a6965d102417
 --- /dev/null
 +++ b/drivers/gpu/drm/i915/intel_ipts.h
 @@ -0,0 +1,34 @@
@@ -976,20 +986,20 @@ index 0000000..a6965d1
 +
 +#endif //_INTEL_IPTS_H_
 diff --git a/drivers/gpu/drm/i915/intel_lrc.c b/drivers/gpu/drm/i915/intel_lrc.c
-index e71a8cd..78a35f7 100644
+index 8704f7f8d072..3918b3b778db 100644
 --- a/drivers/gpu/drm/i915/intel_lrc.c
 +++ b/drivers/gpu/drm/i915/intel_lrc.c
-@@ -212,8 +212,6 @@
+@@ -162,8 +162,6 @@
+ #define WA_TAIL_DWORDS 2
  #define WA_TAIL_BYTES (sizeof(u32) * WA_TAIL_DWORDS)
- #define PREEMPT_ID 0x1
  
 -static int execlists_context_deferred_alloc(struct i915_gem_context *ctx,
 -					    struct intel_engine_cs *engine);
  static void execlists_init_reg_state(u32 *reg_state,
  				     struct i915_gem_context *ctx,
  				     struct intel_engine_cs *engine,
-@@ -1060,7 +1058,7 @@ static void execlists_schedule(struct drm_i915_gem_request *request, int prio)
- 	spin_unlock_irq(&engine->timeline->lock);
+@@ -1187,7 +1185,7 @@ static int __context_pin(struct i915_gem_context *ctx, struct i915_vma *vma)
+ 	return i915_vma_pin(vma, 0, GEN8_LR_CONTEXT_ALIGN, flags);
  }
  
 -static struct intel_ring *
@@ -997,7 +1007,7 @@ index e71a8cd..78a35f7 100644
  execlists_context_pin(struct intel_engine_cs *engine,
  		      struct i915_gem_context *ctx)
  {
-@@ -1122,7 +1120,7 @@ execlists_context_pin(struct intel_engine_cs *engine,
+@@ -1240,7 +1238,7 @@ execlists_context_pin(struct intel_engine_cs *engine,
  	return ERR_PTR(ret);
  }
  
@@ -1006,7 +1016,7 @@ index e71a8cd..78a35f7 100644
  				    struct i915_gem_context *ctx)
  {
  	struct intel_context *ce = &ctx->engine[engine->id];
-@@ -1981,6 +1979,9 @@ int logical_render_ring_init(struct intel_engine_cs *engine)
+@@ -2193,6 +2191,9 @@ int logical_render_ring_init(struct intel_engine_cs *engine)
  
  	logical_ring_setup(engine);
  
@@ -1016,7 +1026,7 @@ index e71a8cd..78a35f7 100644
  	if (HAS_L3_DPF(dev_priv))
  		engine->irq_keep_mask |= GT_RENDER_L3_PARITY_ERROR_INTERRUPT;
  
-@@ -2213,7 +2214,7 @@ populate_lr_context(struct i915_gem_context *ctx,
+@@ -2455,7 +2456,7 @@ populate_lr_context(struct i915_gem_context *ctx,
  	return 0;
  }
  
@@ -1026,12 +1036,12 @@ index e71a8cd..78a35f7 100644
  {
  	struct drm_i915_gem_object *ctx_obj;
 diff --git a/drivers/gpu/drm/i915/intel_lrc.h b/drivers/gpu/drm/i915/intel_lrc.h
-index 689fde1..54a076d 100644
+index 59d7b86012e9..c3d42a5dfe22 100644
 --- a/drivers/gpu/drm/i915/intel_lrc.h
 +++ b/drivers/gpu/drm/i915/intel_lrc.h
-@@ -112,4 +112,12 @@ intel_lr_context_descriptor(struct i915_gem_context *ctx,
- int intel_sanitize_enable_execlists(struct drm_i915_private *dev_priv,
- 				    int enable_execlists);
+@@ -111,4 +111,12 @@ intel_lr_context_descriptor(struct i915_gem_context *ctx,
+ 	return ctx->engine[engine->id].lrc_desc;
+ }
  
 +struct intel_ring *
 +execlists_context_pin(struct intel_engine_cs *engine,
@@ -1043,7 +1053,7 @@ index 689fde1..54a076d 100644
 +
  #endif /* _INTEL_LRC_H_ */
 diff --git a/drivers/gpu/drm/i915/intel_panel.c b/drivers/gpu/drm/i915/intel_panel.c
-index adc51e4..a3294c4 100644
+index 41d00b1603e3..c0de071d19e7 100644
 --- a/drivers/gpu/drm/i915/intel_panel.c
 +++ b/drivers/gpu/drm/i915/intel_panel.c
 @@ -34,6 +34,7 @@
@@ -1054,31 +1064,31 @@ index adc51e4..a3294c4 100644
  
  #define CRC_PMIC_PWM_PERIOD_NS	21333
  
-@@ -719,6 +720,9 @@ static void lpt_disable_backlight(const struct drm_connector_state *old_conn_sta
+@@ -679,6 +680,9 @@ static void lpt_disable_backlight(const struct drm_connector_state *old_conn_sta
  	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
  	u32 tmp;
  
-+	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc_submission)
++	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc && i915_modparams.enable_ipts)
 +		intel_ipts_notify_backlight_status(false);
 +
  	intel_panel_actually_set_backlight(old_conn_state, 0);
  
  	/*
-@@ -906,6 +910,9 @@ static void lpt_enable_backlight(const struct intel_crtc_state *crtc_state,
+@@ -866,6 +870,9 @@ static void lpt_enable_backlight(const struct intel_crtc_state *crtc_state,
  
  	/* This won't stick until the above enable. */
  	intel_panel_actually_set_backlight(conn_state, panel->backlight.level);
 +
-+	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc_submission)
++	if (INTEL_GEN(dev_priv) >= 9 && i915_modparams.enable_guc && i915_modparams.enable_ipts)
 +		intel_ipts_notify_backlight_status(true);
  }
  
  static void pch_enable_backlight(const struct intel_crtc_state *crtc_state,
 diff --git a/drivers/hid/hid-multitouch.c b/drivers/hid/hid-multitouch.c
-index 3975929..94488a5 100644
+index dad2fbb0e3f8..1e561872a17f 100644
 --- a/drivers/hid/hid-multitouch.c
 +++ b/drivers/hid/hid-multitouch.c
-@@ -145,6 +145,7 @@ struct mt_device {
+@@ -151,6 +151,7 @@ struct mt_device {
  
  static void mt_post_parse_default_settings(struct mt_device *td);
  static void mt_post_parse(struct mt_device *td);
@@ -1086,7 +1096,7 @@ index 3975929..94488a5 100644
  
  /* classes of device behavior */
  #define MT_CLS_DEFAULT				0x0001
-@@ -605,8 +606,12 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
+@@ -614,8 +615,12 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
  			if (field->index >= field->report->maxfield ||
  			    usage->usage_index >= field->report_count)
  				return 1;
@@ -1099,9 +1109,9 @@ index 3975929..94488a5 100644
 +				cc_seen++;
 +			}
  			return 1;
- 		case HID_DG_CONTACTMAX:
- 			/* we don't set td->last_slot_field as contactcount and
-@@ -643,6 +648,16 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
+ 		case HID_DG_AZIMUTH:
+ 			hid_map_usage(hi, usage, bit, max,
+@@ -666,6 +671,16 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
  	return 0;
  }
  
@@ -1118,19 +1128,19 @@ index 3975929..94488a5 100644
  static int mt_compute_slot(struct mt_device *td, struct input_dev *input)
  {
  	__s32 quirks = td->mtclass.quirks;
-@@ -985,9 +1000,11 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
+@@ -1062,9 +1077,11 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
  	    field->application != HID_DG_TOUCHSCREEN &&
  	    field->application != HID_DG_PEN &&
  	    field->application != HID_DG_TOUCHPAD &&
-+		field->application != HID_GD_MOUSE &&
++	    field->application != HID_GD_MOUSE &&
  	    field->application != HID_GD_KEYBOARD &&
  	    field->application != HID_GD_SYSTEM_CONTROL &&
  	    field->application != HID_CP_CONSUMER_CONTROL &&
-+		field->logical != HID_DG_TOUCHSCREEN &&
++	    field->logical != HID_DG_TOUCHSCREEN &&
  	    field->application != HID_GD_WIRELESS_RADIO_CTLS &&
  	    !(field->application == HID_VD_ASUS_CUSTOM_MEDIA_KEYS &&
  	      td->mtclass.quirks & MT_QUIRK_ASUS_CUSTOM_UP))
-@@ -1050,10 +1067,8 @@ static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
+@@ -1127,10 +1144,8 @@ static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
  		return 0;
  
  	if (field->application == HID_DG_TOUCHSCREEN ||
@@ -1143,82 +1153,41 @@ index 3975929..94488a5 100644
  
  	/* let hid-core decide for the others */
  	return 0;
-@@ -1196,6 +1211,7 @@ static int mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
- 		suffix = "Pen";
- 		/* force BTN_STYLUS to allow tablet matching in udev */
- 		__set_bit(BTN_STYLUS, hi->input->keybit);
-+        __set_bit(INPUT_PROP_DIRECT, hi->input->propbit);
- 	} else {
- 		switch (field->application) {
- 		case HID_GD_KEYBOARD:
-@@ -1211,9 +1227,10 @@ static int mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
+@@ -1315,6 +1330,7 @@ static int mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
  			suffix = "Pen";
  			/* force BTN_STYLUS to allow tablet matching in udev */
  			__set_bit(BTN_STYLUS, hi->input->keybit);
-+            __set_bit(INPUT_PROP_DIRECT, hi->input->propbit);
++			__set_bit(INPUT_PROP_DIRECT, hi->input->propbit);
+ 		}
+ 	}
+ 
+@@ -1331,11 +1347,12 @@ static int mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
  			break;
  		case HID_DG_TOUCHSCREEN:
--			/* we do not set suffix = "Touchscreen" */
+ 			/* we do not set suffix = "Touchscreen" */
+-			hi->input->name = hdev->name;
 +			suffix = "Touchscreen";
  			break;
- 		case HID_DG_TOUCHPAD:
- 			suffix = "Touchpad";
-@@ -1343,6 +1360,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
- 	td->inputmode_value = MT_INPUTMODE_TOUCHSCREEN;
+ 		case HID_DG_STYLUS:
+ 			/* force BTN_STYLUS to allow tablet matching in udev */
+ 			__set_bit(BTN_STYLUS, hi->input->keybit);
++			__set_bit(INPUT_PROP_DIRECT, hi->input->propbit);
+ 			break;
+ 		case HID_VD_ASUS_CUSTOM_MEDIA_KEYS:
+ 			suffix = "Custom Media Keys";
+@@ -1452,6 +1469,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
  	td->cc_index = -1;
+ 	td->scantime_index = -1;
  	td->mt_report_id = -1;
 +	cc_seen = 0;
  	hid_set_drvdata(hdev, td);
  
  	td->fields = devm_kzalloc(&hdev->dev, sizeof(struct mt_fields),
-diff --git a/drivers/hid/i2c-hid/i2c-hid.c b/drivers/hid/i2c-hid/i2c-hid.c
-index e054ee4..7230243 100644
---- a/drivers/hid/i2c-hid/i2c-hid.c
-+++ b/drivers/hid/i2c-hid/i2c-hid.c
-@@ -934,11 +934,6 @@ static int i2c_hid_of_probe(struct i2c_client *client,
- 	}
- 	pdata->hid_descriptor_address = val;
- 
--	ret = of_property_read_u32(dev->of_node, "post-power-on-delay-ms",
--				   &val);
--	if (!ret)
--		pdata->post_power_delay_ms = val;
--
- 	return 0;
- }
- 
-@@ -955,6 +950,16 @@ static inline int i2c_hid_of_probe(struct i2c_client *client,
- }
- #endif
- 
-+static void i2c_hid_fwnode_probe(struct i2c_client *client,
-+				 struct i2c_hid_platform_data *pdata)
-+{
-+	u32 val;
-+
-+	if (!device_property_read_u32(&client->dev, "post-power-on-delay-ms",
-+				      &val))
-+		pdata->post_power_delay_ms = val;
-+}
-+
- static int i2c_hid_probe(struct i2c_client *client,
- 			 const struct i2c_device_id *dev_id)
- {
-@@ -998,6 +1003,9 @@ static int i2c_hid_probe(struct i2c_client *client,
- 		ihid->pdata = *platform_data;
- 	}
- 
-+	/* Parse platform agnostic common properties from ACPI / device tree */
-+	i2c_hid_fwnode_probe(client, &ihid->pdata);
-+
- 	ihid->pdata.supply = devm_regulator_get(&client->dev, "vdd");
- 	if (IS_ERR(ihid->pdata.supply)) {
- 		ret = PTR_ERR(ihid->pdata.supply);
 diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
-index f1a5c23..3111140 100644
+index 5d713008749b..a7b48481cf40 100644
 --- a/drivers/misc/Kconfig
 +++ b/drivers/misc/Kconfig
-@@ -503,6 +503,7 @@ source "drivers/misc/ti-st/Kconfig"
+@@ -506,6 +506,7 @@ source "drivers/misc/ti-st/Kconfig"
  source "drivers/misc/lis3lv02d/Kconfig"
  source "drivers/misc/altera-stapl/Kconfig"
  source "drivers/misc/mei/Kconfig"
@@ -1227,7 +1196,7 @@ index f1a5c23..3111140 100644
  source "drivers/misc/mic/Kconfig"
  source "drivers/misc/genwqe/Kconfig"
 diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
-index 5ca5f64..1673753 100644
+index 20be70c3f118..e99a59131282 100644
 --- a/drivers/misc/Makefile
 +++ b/drivers/misc/Makefile
 @@ -43,6 +43,7 @@ obj-y				+= lis3lv02d/
@@ -1240,7 +1209,7 @@ index 5ca5f64..1673753 100644
  obj-$(CONFIG_SRAM)		+= sram.o
 diff --git a/drivers/misc/ipts/Kconfig b/drivers/misc/ipts/Kconfig
 new file mode 100644
-index 0000000..360ed38
+index 000000000000..360ed3861b82
 --- /dev/null
 +++ b/drivers/misc/ipts/Kconfig
 @@ -0,0 +1,9 @@
@@ -1255,7 +1224,7 @@ index 0000000..360ed38
 +	  Intel Kabylake
 diff --git a/drivers/misc/ipts/Makefile b/drivers/misc/ipts/Makefile
 new file mode 100644
-index 0000000..1783e9c
+index 000000000000..1783e9cf13c9
 --- /dev/null
 +++ b/drivers/misc/ipts/Makefile
 @@ -0,0 +1,13 @@
@@ -1274,7 +1243,7 @@ index 0000000..1783e9c
 +intel-ipts-$(CONFIG_DEBUG_FS) += ipts-dbgfs.o
 diff --git a/drivers/misc/ipts/ipts-binary-spec.h b/drivers/misc/ipts/ipts-binary-spec.h
 new file mode 100644
-index 0000000..87d4bc4
+index 000000000000..87d4bc4133c4
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-binary-spec.h
 @@ -0,0 +1,118 @@
@@ -1398,7 +1367,7 @@ index 0000000..87d4bc4
 +#endif /* _IPTS_BINARY_SPEC_H */
 diff --git a/drivers/misc/ipts/ipts-dbgfs.c b/drivers/misc/ipts/ipts-dbgfs.c
 new file mode 100644
-index 0000000..1c5c92f
+index 000000000000..1c5c92f7d4ba
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-dbgfs.c
 @@ -0,0 +1,152 @@
@@ -1556,7 +1525,7 @@ index 0000000..1c5c92f
 +}
 diff --git a/drivers/misc/ipts/ipts-gfx.c b/drivers/misc/ipts/ipts-gfx.c
 new file mode 100644
-index 0000000..5172777
+index 000000000000..51727770e75d
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-gfx.c
 @@ -0,0 +1,184 @@
@@ -1746,7 +1715,7 @@ index 0000000..5172777
 +}
 diff --git a/drivers/misc/ipts/ipts-gfx.h b/drivers/misc/ipts/ipts-gfx.h
 new file mode 100644
-index 0000000..03a5f35
+index 000000000000..03a5f3551ddf
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-gfx.h
 @@ -0,0 +1,24 @@
@@ -1776,7 +1745,7 @@ index 0000000..03a5f35
 +#endif // _IPTS_GFX_H_
 diff --git a/drivers/misc/ipts/ipts-hid.c b/drivers/misc/ipts/ipts-hid.c
 new file mode 100644
-index 0000000..3b3be61
+index 000000000000..3b3be6177648
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-hid.c
 @@ -0,0 +1,456 @@
@@ -2238,7 +2207,7 @@ index 0000000..3b3be61
 +}
 diff --git a/drivers/misc/ipts/ipts-hid.h b/drivers/misc/ipts/ipts-hid.h
 new file mode 100644
-index 0000000..f1b22c9
+index 000000000000..f1b22c912df7
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-hid.h
 @@ -0,0 +1,34 @@
@@ -2278,7 +2247,7 @@ index 0000000..f1b22c9
 +#endif /* _IPTS_HID_H_ */
 diff --git a/drivers/misc/ipts/ipts-kernel.c b/drivers/misc/ipts/ipts-kernel.c
 new file mode 100644
-index 0000000..ca5e24c
+index 000000000000..ca5e24ce579e
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-kernel.c
 @@ -0,0 +1,1050 @@
@@ -3334,7 +3303,7 @@ index 0000000..ca5e24c
 +}
 diff --git a/drivers/misc/ipts/ipts-kernel.h b/drivers/misc/ipts/ipts-kernel.h
 new file mode 100644
-index 0000000..0e7f139
+index 000000000000..0e7f1393b807
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-kernel.h
 @@ -0,0 +1,23 @@
@@ -3363,7 +3332,7 @@ index 0000000..0e7f139
 +#endif
 diff --git a/drivers/misc/ipts/ipts-mei-msgs.h b/drivers/misc/ipts/ipts-mei-msgs.h
 new file mode 100644
-index 0000000..8ca1468
+index 000000000000..8ca146800a47
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-mei-msgs.h
 @@ -0,0 +1,585 @@
@@ -3954,7 +3923,7 @@ index 0000000..8ca1468
 +#endif // _IPTS_MEI_MSGS_H_
 diff --git a/drivers/misc/ipts/ipts-mei.c b/drivers/misc/ipts/ipts-mei.c
 new file mode 100644
-index 0000000..39667e7
+index 000000000000..39667e75dafd
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-mei.c
 @@ -0,0 +1,282 @@
@@ -4242,7 +4211,7 @@ index 0000000..39667e7
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/misc/ipts/ipts-msg-handler.c b/drivers/misc/ipts/ipts-msg-handler.c
 new file mode 100644
-index 0000000..1396ecc
+index 000000000000..1396ecc7197f
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-msg-handler.c
 @@ -0,0 +1,431 @@
@@ -4679,7 +4648,7 @@ index 0000000..1396ecc
 +}
 diff --git a/drivers/misc/ipts/ipts-msg-handler.h b/drivers/misc/ipts/ipts-msg-handler.h
 new file mode 100644
-index 0000000..b8e27d3
+index 000000000000..b8e27d30c63e
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-msg-handler.h
 @@ -0,0 +1,32 @@
@@ -4717,7 +4686,7 @@ index 0000000..b8e27d3
 +#endif /* _IPTS_MSG_HANDLER_H */
 diff --git a/drivers/misc/ipts/ipts-resource.c b/drivers/misc/ipts/ipts-resource.c
 new file mode 100644
-index 0000000..47607ef
+index 000000000000..47607ef7c461
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-resource.c
 @@ -0,0 +1,277 @@
@@ -5000,7 +4969,7 @@ index 0000000..47607ef
 +}
 diff --git a/drivers/misc/ipts/ipts-resource.h b/drivers/misc/ipts/ipts-resource.h
 new file mode 100644
-index 0000000..7d66ac7
+index 000000000000..7d66ac72b475
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-resource.h
 @@ -0,0 +1,30 @@
@@ -5036,7 +5005,7 @@ index 0000000..7d66ac7
 +#endif // _IPTS_RESOURCE_H_
 diff --git a/drivers/misc/ipts/ipts-sensor-regs.h b/drivers/misc/ipts/ipts-sensor-regs.h
 new file mode 100644
-index 0000000..96812b0
+index 000000000000..96812b0eb980
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-sensor-regs.h
 @@ -0,0 +1,700 @@
@@ -5742,7 +5711,7 @@ index 0000000..96812b0
 +#endif // _TOUCH_SENSOR_REGS_H
 diff --git a/drivers/misc/ipts/ipts-state.h b/drivers/misc/ipts/ipts-state.h
 new file mode 100644
-index 0000000..39a2eaf
+index 000000000000..39a2eaf5f004
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts-state.h
 @@ -0,0 +1,29 @@
@@ -5777,7 +5746,7 @@ index 0000000..39a2eaf
 +#endif // _IPTS_STATE_H_
 diff --git a/drivers/misc/ipts/ipts.h b/drivers/misc/ipts/ipts.h
 new file mode 100644
-index 0000000..1fcd021
+index 000000000000..1fcd02146b50
 --- /dev/null
 +++ b/drivers/misc/ipts/ipts.h
 @@ -0,0 +1,200 @@
@@ -5982,7 +5951,7 @@ index 0000000..1fcd021
 +
 +#endif // _IPTS_H_
 diff --git a/drivers/misc/mei/hw-me-regs.h b/drivers/misc/mei/hw-me-regs.h
-index e4b10b2..883b185 100644
+index e4b10b2d1a08..883b185c9dbe 100644
 --- a/drivers/misc/mei/hw-me-regs.h
 +++ b/drivers/misc/mei/hw-me-regs.h
 @@ -119,6 +119,7 @@
@@ -5994,7 +5963,7 @@ index e4b10b2..883b185 100644
  #define MEI_DEV_ID_SPT_H_2    0xA13B  /* Sunrise Point H 2 */
  
 diff --git a/drivers/misc/mei/pci-me.c b/drivers/misc/mei/pci-me.c
-index ea4e152..4d301ba 100644
+index ea4e152270a3..4d301ba3f867 100644
 --- a/drivers/misc/mei/pci-me.c
 +++ b/drivers/misc/mei/pci-me.c
 @@ -86,6 +86,7 @@ static const struct pci_device_id mei_me_pci_tbl[] = {
@@ -6007,7 +5976,7 @@ index ea4e152..4d301ba 100644
  	{MEI_PCI_DEVICE(MEI_DEV_ID_LBG, MEI_ME_PCH8_CFG)},
 diff --git a/include/linux/intel_ipts_if.h b/include/linux/intel_ipts_if.h
 new file mode 100644
-index 0000000..f329bbf
+index 000000000000..f329bbfb8079
 --- /dev/null
 +++ b/include/linux/intel_ipts_if.h
 @@ -0,0 +1,75 @@

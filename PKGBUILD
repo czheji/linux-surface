@@ -4,22 +4,29 @@
 # Maintainer: Thomas Baechler <thomas@archlinux.org>
 
 pkgbase=linux-surface4       # Build kernel with a different name
-_srcver=4.18.5
+_srcver=4.18.6
 pkgver=${_srcver//-/.}
 pkgrel=1
 arch=(x86_64)
 url="https://www.kernel.org/pub/linux/kernel/v4.x/"
 license=(GPL2)
-makedepends=(xmlto kmod inetutils bc libelf git python-sphinx graphviz)
+makedepends=(xmlto kmod inetutils bc libelf git python-sphinx graphviz dmidecode)
 options=('!strip')
 _srcname=linux-${_srcver}
 source=(
-  "https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.18.5.tar.xz"
-  "https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.18.5.tar.sign"
+  "https://www.kernel.org/pub/linux/kernel/v4.x/linux-${_srcver}.tar.xz"
+  "https://www.kernel.org/pub/linux/kernel/v4.x/linux-${_srcver}.tar.sign"
   config         # the main kernel config file
   60-linux.hook  # pacman hook for depmod
   90-linux.hook  # pacman hook for initramfs regeneration
   linux.preset   # standard config files for mkinitcpio ramdisk
+  acpi.patch
+  buttons.patch
+  ipts.patch
+  keyboards_and_covers.patch
+  sdcard_reader.patch
+  surfacedock.patch
+  wifi.patch
 )
 validpgpkeys=(
   'ABAF11C65A2970B130ABE3C479BE3E4300411886'  # Linus Torvalds
@@ -28,10 +35,17 @@ validpgpkeys=(
 )
 sha256sums=('SKIP'
             'SKIP'
-            'd2e706aeae315a6837991e8653e873c3ed6ff1aef25a28b2442119fef7f27fe2'
+            '089fec0bdbc49ff06f8cec26ba8b8e556ea853a2ee37f48882f696d83575e12f'
             'ae2e95db94ef7176207c690224169594d49445e04249d2499e9d2fbc117a0b21'
             '75f99f5239e03238f88d1a834c50043ec32b1dc568f2cc291b07d04718483919'
-            'ad6344badc91ad0630caacde83f7f9b97276f80d26a20619a87952be65492c65')
+            'ad6344badc91ad0630caacde83f7f9b97276f80d26a20619a87952be65492c65'
+            '5a9c7cf3cbc93a778cbf923aa7b442f5f8cc95273435fb1ef4eb9ff9de8190fb'
+            '3025bb0b3f216ca62eea021f20b060662f4cde5fd90d3e4971e2d8d37dc89928'
+            'a6a40cb4781ae8d31ec4a6580f3e0a1c6f3bb20c5b8a5103f7fff279bce37e40'
+            '5f51ddfd49f581aed02141ff11ffaa556d4737d34b9958d342a84c0149c5bba6'
+            '7b58bf7bf2d61fea106af24b37ee4e2c5faf7e4ffa55be5769a1b1d0c5fb04af'
+            'cbad22346c934a52a42716c8af604154b52c21dccc938e22a40eb51f9179ae0e'
+            '0526f56347aa4c7f8b604c614300baff1da3dddb2930b4c2b8890622c6e99e82')
 
 _kernelname=${pkgbase#linux}
 : ${_kernelname:=-ARCH}
