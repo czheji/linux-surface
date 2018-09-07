@@ -63,14 +63,14 @@ prepare() {
   echo "-$pkgrel" > localversion.10-pkgrel
   echo "$_kernelname" > localversion.20-pkgname
 
-  #local src
-  #for src in "${source[@]}"; do
-  #  src="${src%%::*}"
-  #  src="${src##*/}"
-  #  [[ $src = *.patch ]] || continue
-  #  msg2 "Applying patch $src..."
-  #  patch -Np1 < "../$src"
-  #done
+  local src
+  for src in "${source[@]}"; do
+    src="${src%%::*}"
+    src="${src##*/}"
+    [[ $src = *.patch ]] || continue
+    msg2 "Applying patch $src..."
+    patch -Np1 < "../$src"
+  done
 
   msg2 "Setting config..."
   cp ../config .config
@@ -82,7 +82,7 @@ prepare() {
 
 build() {
   cd $_srcname
-  #make bzImage modules htmldocs
+  make bzImage modules htmldocs
 }
 
 _package() {
@@ -137,7 +137,7 @@ _package() {
 
   msg2 "Intall i915 & ipts firmware..."
   sed "$subst" ../update-firmware.sh | install -Dm755 /dev/stdin \
-    "$pkgdir/usr/bin/$pkgbase-firmware.sh"
+    "$pkgdir/usr/bin/$pkgbase-firmware"
   install -Dm64 ../i915_firmware_bxt.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_bxt.zip"
   install -Dm64 ../i915_firmware_cfl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_cfl.zip"
   install -Dm64 ../i915_firmware_cnl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_cnl.zip"

@@ -1,14 +1,14 @@
 post_install() {
   echo "You need install firmware by yourself:"
-  echo "sudo /usr/bin/%PKGBASE%-firmware.sh"
-  
-
+  echo "sudo /usr/bin/%PKGBASE%-firmware"
 }
 
 post_upgrade() {
   if findmnt --fstab -uno SOURCE /boot &>/dev/null && ! mountpoint -q /boot; then
     echo "WARNING: /boot appears to be a separate partition but is not mounted."
   fi
+  echo "You need install firmware by yourself:"
+  echo "sudo /usr/bin/%PKGBASE%-firmware"
 }
 
 post_remove() {
