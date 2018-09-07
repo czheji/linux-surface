@@ -27,7 +27,7 @@ Linux running on the Surface Book, Surface Book 2, Surface Pro 3, Surface Pro 4,
 ### What's NOT Working
 
 * Dedicated Nvidia GPU (if you have a performance base on a Surface Book 1, otherwise onboard works fine)
-* Cameras (totally not working)
+* Cameras
 * Suspend (uses Connected Standby which is not supported yet)
 
 ### Disclaimer
@@ -111,9 +111,8 @@ If you don't want to use the pre-built kernel and headers, you can compile the k
 It will build the packages for archlinux
 Forked from jakeday/linux-surface, I have tested it in my surface pro4. 
 ```
-git clone https://github.com/jakeday/linux-surface.git
-cd linux-surface/build
-makepkg -si
+git clone https://github.com/czheji/linux-surface.git --depth 1
+makepkg -sci
 ```
 
 ### NOTES
