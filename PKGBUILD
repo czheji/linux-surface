@@ -10,12 +10,13 @@ pkgrel=1
 arch=(x86_64)
 url="https://www.kernel.org/pub/linux/kernel/v4.x/"
 license=(GPL2)
-makedepends=(xmlto kmod inetutils bc libelf git python-sphinx graphviz dmidecode)
+makedepends=(xmlto kmod inetutils bc libelf git python-sphinx graphviz)
 options=('!strip')
 _srcname=linux-${_srcver}
 source=(
   "https://www.kernel.org/pub/linux/kernel/v4.x/linux-${_srcver}.tar.xz"
   "https://www.kernel.org/pub/linux/kernel/v4.x/linux-${_srcver}.tar.sign"
+  update-firmware.sh
   config         # the main kernel config file
   60-linux.hook  # pacman hook for depmod
   90-linux.hook  # pacman hook for initramfs regeneration
@@ -27,6 +28,8 @@ source=(
   sdcard_reader.patch
   surfacedock.patch
   wifi.patch
+  firmware.zip
+
 )
 validpgpkeys=(
   'ABAF11C65A2970B130ABE3C479BE3E4300411886'  # Linus Torvalds
@@ -35,6 +38,7 @@ validpgpkeys=(
 )
 sha256sums=('SKIP'
             'SKIP'
+            '44adcf5a8394d747aacc93bee1fe843cc0c9875ec3f854afb7acb212f4fa0c18'
             '089fec0bdbc49ff06f8cec26ba8b8e556ea853a2ee37f48882f696d83575e12f'
             'ae2e95db94ef7176207c690224169594d49445e04249d2499e9d2fbc117a0b21'
             '75f99f5239e03238f88d1a834c50043ec32b1dc568f2cc291b07d04718483919'
@@ -45,7 +49,8 @@ sha256sums=('SKIP'
             '5f51ddfd49f581aed02141ff11ffaa556d4737d34b9958d342a84c0149c5bba6'
             '7b58bf7bf2d61fea106af24b37ee4e2c5faf7e4ffa55be5769a1b1d0c5fb04af'
             'cbad22346c934a52a42716c8af604154b52c21dccc938e22a40eb51f9179ae0e'
-            '0526f56347aa4c7f8b604c614300baff1da3dddb2930b4c2b8890622c6e99e82')
+            '0526f56347aa4c7f8b604c614300baff1da3dddb2930b4c2b8890622c6e99e82'
+            '75c9db69d7e7e5d90683a797347b1c9d19f27f80be25e57f4110ff2b9e1e9e5b')
 
 _kernelname=${pkgbase#linux}
 : ${_kernelname:=-ARCH}
@@ -58,14 +63,14 @@ prepare() {
   echo "-$pkgrel" > localversion.10-pkgrel
   echo "$_kernelname" > localversion.20-pkgname
 
-  local src
-  for src in "${source[@]}"; do
-    src="${src%%::*}"
-    src="${src##*/}"
-    [[ $src = *.patch ]] || continue
-    msg2 "Applying patch $src..."
-    patch -Np1 < "../$src"
-  done
+  #local src
+  #for src in "${source[@]}"; do
+  #  src="${src%%::*}"
+  #  src="${src##*/}"
+  #  [[ $src = *.patch ]] || continue
+  #  msg2 "Applying patch $src..."
+  #  patch -Np1 < "../$src"
+  #done
 
   msg2 "Setting config..."
   cp ../config .config
@@ -77,13 +82,13 @@ prepare() {
 
 build() {
   cd $_srcname
-  make bzImage modules htmldocs
+  #make bzImage modules htmldocs
 }
 
 _package() {
   pkgdesc="The ${pkgbase/linux/Linux} kernel and modules"
   [[ $pkgbase = linux ]] && groups=(base)
-  depends=(coreutils linux-firmware kmod mkinitcpio)
+  depends=(coreutils linux-firmware kmod mkinitcpio dmidecode unzip)
   optdepends=('crda: to set the correct wireless channels of your country')
   backup=("etc/mkinitcpio.d/$pkgbase.preset")
   install=linux.install
@@ -129,6 +134,25 @@ _package() {
     "$pkgdir/usr/share/libalpm/hooks/60-$pkgbase.hook"
   sed "$subst" ../90-linux.hook | install -Dm644 /dev/stdin \
     "$pkgdir/usr/share/libalpm/hooks/90-$pkgbase.hook"
+
+  msg2 "Intall i915 & ipts firmware..."
+  sed "$subst" ../update-firmware.sh | install -Dm755 /dev/stdin \
+    "$pkgdir/usr/bin/$pkgbase-firmware.sh"
+  install -Dm64 ../i915_firmware_bxt.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_bxt.zip"
+  install -Dm64 ../i915_firmware_cfl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_cfl.zip"
+  install -Dm64 ../i915_firmware_cnl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_cnl.zip"
+  install -Dm64 ../i915_firmware_glk.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_glk.zip"
+  install -Dm64 ../i915_firmware_kbl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_kbl.zip"
+  install -Dm64 ../i915_firmware_skl.zip "$pkgdir/usr/share/${pkgbase}/firmware/i915_firmware_skl.zip"
+  install -Dm64 ../ipts_firmware_v101.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v101.zip"
+  install -Dm64 ../ipts_firmware_v102.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v102.zip"
+  install -Dm64 ../ipts_firmware_v103.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v103.zip"
+  install -Dm64 ../ipts_firmware_v137.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v137.zip"
+  install -Dm64 ../ipts_firmware_v76.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v76.zip"
+  install -Dm64 ../ipts_firmware_v78.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v78.zip"
+  install -Dm64 ../ipts_firmware_v79.zip "$pkgdir/usr/share/${pkgbase}/firmware/ipts_firmware_v79.zip"
+  install -Dm64 ../nvidia_firmware_gp108.zip "$pkgdir/usr/share/${pkgbase}/firmware/nvidia_firmware_gp108.zip"
+  install -Dm64 ../mrvl_firmware.zip "$pkgdir/usr/share/${pkgbase}/firmware/mrvl_firmware.zip"
 
   msg2 "Fixing permissions..."
   chmod -Rc u=rwX,go=rX "$pkgdir"

@@ -1,9 +1,7 @@
 post_install() {
-  echo "post install called."
-  SUR_MODEL="$(dmidecode | grep "Product Name" -m 1 | xargs | sed -e 's/Product Name: //g')"
-  SUR_SKU="$(dmidecode | grep "SKU Number" -m 1 | xargs | sed -e 's/SKU Number: //g')"
-
-  echo "\ninstall on ${SUR_MODEL}\n"
+  echo "You need install firmware by yourself:"
+  echo "sudo /usr/bin/%PKGBASE%-firmware.sh"
+  
 
 }
 

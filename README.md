@@ -15,7 +15,6 @@ Linux running on the Surface Book, Surface Book 2, Surface Pro 3, Surface Pro 4,
 * Power Button (not yet working for SB2/SP2017)
 * Volume Buttons (not yet working for SB2/SP2017)
 * SD Card Reader
-* Cameras (partial support, disabled for now)
 * Hibernate
 * Sensors (accelerometer, gyroscope, ambient light sensor)
 * Battery Readings (not yet working for SB2/SP2017)
@@ -28,7 +27,7 @@ Linux running on the Surface Book, Surface Book 2, Surface Pro 3, Surface Pro 4,
 ### What's NOT Working
 
 * Dedicated Nvidia GPU (if you have a performance base on a Surface Book 1, otherwise onboard works fine)
-* Cameras (not fully supported yet)
+* Cameras (totally not working)
 * Suspend (uses Connected Standby which is not supported yet)
 
 ### Disclaimer
