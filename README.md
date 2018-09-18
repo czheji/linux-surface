@@ -109,10 +109,15 @@ If you don't want to use the pre-built kernel and headers, you can compile the k
 ### Build in archlinux build system
 
 It will build the packages for archlinux
-Forked from jakeday/linux-surface, I have tested it in my surface pro4. 
+Forked from czheji/linux-surface, I have tested it in my surface pro4. 
 ```
-git clone https://github.com/czheji/linux-surface.git --depth 1
+git clone https://github.com/czheji/linux-surface.git
+cd linux-surface
 makepkg -sci
+```
+Before reboot os, You need install firmware first:
+```
+sudo linux-surface4-firmware
 ```
 
 ### NOTES
