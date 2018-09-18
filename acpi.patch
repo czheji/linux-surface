@@ -37,7 +37,7 @@ new file mode 100644
 index 000000000000..c969bda99464
 --- /dev/null
 +++ b/drivers/platform/x86/surface_acpi.c
-@@ -0,0 +1,485 @@
+@@ -0,0 +1,481 @@
 +/*
 + *  surface_acpi.c - Microsoft Surface ACPI Driver
 + *
@@ -468,10 +468,6 @@ index 000000000000..c969bda99464
 +static const struct acpi_device_id surface_device_ids[] = {
 +	{"MSHW0084", 0},
 +	{"MSHW0091", 0},
-+	{"MSHW0124", 0},
-+	{"INT3403", 0},
-+	{"LNXTHERM", 0},
-+	{"PNP0C0A", 0},
 +	{"", 0},
 +};
 +MODULE_DEVICE_TABLE(acpi, surface_device_ids);

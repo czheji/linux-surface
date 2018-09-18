@@ -4,7 +4,7 @@
 # Maintainer: Thomas Baechler <thomas@archlinux.org>
 
 pkgbase=linux-surface4       # Build kernel with a different name
-_srcver=4.18.6
+_srcver=4.18.8
 pkgver=${_srcver//-/.}
 pkgrel=1
 arch=(x86_64)
@@ -21,8 +21,8 @@ source=(
   60-linux.hook  # pacman hook for depmod
   90-linux.hook  # pacman hook for initramfs regeneration
   linux.preset   # standard config files for mkinitcpio ramdisk
-  acpi.patch
-  buttons.patch
+  #acpi.patch
+  #buttons.patch
   ipts.patch
   keyboards_and_covers.patch
   sdcard_reader.patch
@@ -39,12 +39,12 @@ validpgpkeys=(
 sha256sums=('SKIP'
             'SKIP'
             '44adcf5a8394d747aacc93bee1fe843cc0c9875ec3f854afb7acb212f4fa0c18'
-            '089fec0bdbc49ff06f8cec26ba8b8e556ea853a2ee37f48882f696d83575e12f'
+            '0c19f6558c6b651350ff4155bbe00e5cfa7b22bbf88e3c8040dd7fd020c86114'
             'ae2e95db94ef7176207c690224169594d49445e04249d2499e9d2fbc117a0b21'
             '75f99f5239e03238f88d1a834c50043ec32b1dc568f2cc291b07d04718483919'
             'ad6344badc91ad0630caacde83f7f9b97276f80d26a20619a87952be65492c65'
-            '5a9c7cf3cbc93a778cbf923aa7b442f5f8cc95273435fb1ef4eb9ff9de8190fb'
-            '3025bb0b3f216ca62eea021f20b060662f4cde5fd90d3e4971e2d8d37dc89928'
+            #'779673f611abdeacc11778d8eb3e6a8f0a717c637951e7ebccf1a827a4a20da8'
+            #'3025bb0b3f216ca62eea021f20b060662f4cde5fd90d3e4971e2d8d37dc89928'
             'a6a40cb4781ae8d31ec4a6580f3e0a1c6f3bb20c5b8a5103f7fff279bce37e40'
             '5f51ddfd49f581aed02141ff11ffaa556d4737d34b9958d342a84c0149c5bba6'
             '7b58bf7bf2d61fea106af24b37ee4e2c5faf7e4ffa55be5769a1b1d0c5fb04af'
